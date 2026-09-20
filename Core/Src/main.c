@@ -69,7 +69,7 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 
 int _write(int file, char *ptr, int len) {
-  // printf回调，向串口发送信息
+  // printf最终会调用_write，这里把printf内容从USART3发出去
   HAL_UART_Transmit(&huart3, (uint8_t *)ptr, len, HAL_MAX_DELAY);
 
   return len;
@@ -113,10 +113,15 @@ int main(void) {
   MX_USART3_UART_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
+  // 控制层初始化：电机PWM和超声波定时器
   Control_Init();
+  // 蓝牙初始化：开启USART3 DMA接收
   Bluetooth_Init();
+  // 模式初始化：默认手动模式
   Carmode_Init();
+  // 舵机PWM初始化
   Servo_Init();
+  // MPU6050初始化、连接测试和零漂校准
   MPU6050_Init();
   MPU6050_Test();
   MPU6050_Calibrate();
@@ -127,19 +132,25 @@ int main(void) {
   /* USER CODE BEGIN WHILE */
   while (1) {
 
+    // 舵机到时间后自动停止
     Servo_Task();
+    // 处理蓝牙收到的新命令
     Bluetooth_Task();
+    // 更新陀螺仪Yaw角度
     MPU6050_Update();
 
     static uint32_t gyro_test_tick = 0;
+    // 每500ms打印一次Yaw，方便调试陀螺仪
     if (HAL_GetTick() - gyro_test_tick >= 500) {
       gyro_test_tick = HAL_GetTick();
       printf("Yaw=%.2f deg\r\n", MPU6050_GetYaw());
     }
 
+    // 自动模式下才执行避障，手动模式由蓝牙命令直接控制
     if (carmode_Getmode() == mode_auto) {
       Control_AvoidanceTask();
     }
+    // 小延时，降低主循环占用，也给其他任务留时间
     HAL_Delay(5);
 
     /* USER CODE END WHILE */
