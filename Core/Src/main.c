@@ -30,6 +30,7 @@
 #include <control.h>
 #include <mode.h>
 #include <motor.h>
+#include <mpu6050.h>
 #include <sensor.h>
 #include <servo.h>
 #include <stdio.h>
@@ -116,6 +117,9 @@ int main(void) {
   Bluetooth_Init();
   Carmode_Init();
   Servo_Init();
+  MPU6050_Init();
+  MPU6050_Test();
+  MPU6050_Calibrate();
 
   /* USER CODE END 2 */
 
@@ -125,6 +129,13 @@ int main(void) {
 
     Servo_Task();
     Bluetooth_Task();
+    MPU6050_Update();
+
+    static uint32_t gyro_test_tick = 0;
+    if (HAL_GetTick() - gyro_test_tick >= 500) {
+      gyro_test_tick = HAL_GetTick();
+      printf("Yaw=%.2f deg\r\n", MPU6050_GetYaw());
+    }
 
     if (carmode_Getmode() == mode_auto) {
       Control_AvoidanceTask();

@@ -37,6 +37,7 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/User/Src/bluetooth.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/User/Src/mode.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/User/Src/servo.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/User/Src/mpu6050.c
 )
 
 

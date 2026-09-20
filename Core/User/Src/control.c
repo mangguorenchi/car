@@ -1,5 +1,6 @@
 #include "control.h"
 #include "motor.h"
+#include "mpu6050.h"
 #include "sensor.h"
 #include <stdio.h>
 
@@ -7,7 +8,10 @@
 #define Turn_Speed 3600
 #define FRONT_OBSTACLE_DISTANCE 450.0f
 #define SIDE_OBSTACLE_DISTANCE 300.0f
-#define AVOID_TURN_TIME 400
+#define CORNER_TURN_TARGET 90.0f
+#define OBSTACLE_TURN_TARGET 60.0f
+#define SIDE_OPEN_DISTANCE 550.0f
+#define AVOID_MAX_TURN_TIME 1500
 #define AVOID_FORWARD_TIME 700
 #define AVOID_BACKWARD_TIME 1000
 
@@ -27,6 +31,27 @@ typedef enum {
 static Avoid_State_t avoid_state;
 static uint32_t avoid_state_tick;
 static uint8_t avoid_turn_direction;
+static uint8_t avoid_need_return;
+static float avoid_turn_target;
+
+static uint8_t Control_TurnFinished(uint8_t direction) {
+  float yaw = MPU6050_GetYaw();
+
+  if (direction == 1 && yaw <= -avoid_turn_target) {
+    return 1;
+  }
+
+  if (direction == 2 && yaw >= avoid_turn_target) {
+    return 1;
+  }
+
+  if (HAL_GetTick() - avoid_state_tick >= AVOID_MAX_TURN_TIME) {
+    printf("Gyro turn timeout, yaw=%.2f\r\n", yaw);
+    return 1;
+  }
+
+  return 0;
+}
 
 void Control_Init(void) {
   Motor_Init();
@@ -65,6 +90,8 @@ void Control_AvoidanceReset(void) {
   avoid_state = AVOID_STATE_RUN;
   avoid_state_tick = HAL_GetTick();
   avoid_turn_direction = 0;
+  avoid_need_return = 0;
+  avoid_turn_target = OBSTACLE_TURN_TARGET;
 }
 // 在ai建议下利用定时器改为了非阻塞状态 9/13日
 void Control_AvoidanceTask(void) {
@@ -111,23 +138,47 @@ void Control_AvoidanceTask(void) {
       break;
     }
 
-    if (left_distance <= SIDE_OBSTACLE_DISTANCE &&
-        right_distance <= SIDE_OBSTACLE_DISTANCE) {
+    if (right_distance >= SIDE_OPEN_DISTANCE) {
+      avoid_turn_direction = 2;
+      avoid_need_return = 0;
+      avoid_turn_target = CORNER_TURN_TARGET;
+      MPU6050_ResetYaw();
+      Control_TurnRight(Turn_Speed);
+      avoid_state = AVOID_STATE_TURN_RIGHT;
+      avoid_state_tick = now;
+    } else if (left_distance >= SIDE_OPEN_DISTANCE) {
+      avoid_turn_direction = 1;
+      avoid_need_return = 0;
+      avoid_turn_target = CORNER_TURN_TARGET;
+      MPU6050_ResetYaw();
+      Control_TurnLeft(Turn_Speed);
+      avoid_state = AVOID_STATE_TURN_LEFT;
+      avoid_state_tick = now;
+    } else if (left_distance <= SIDE_OBSTACLE_DISTANCE &&
+               right_distance <= SIDE_OBSTACLE_DISTANCE) {
       if (left_distance > right_distance) {
         avoid_turn_direction = 1;
       } else {
         avoid_turn_direction = 2;
       }
+      avoid_need_return = 1;
+      avoid_turn_target = OBSTACLE_TURN_TARGET;
       Control_Backward(Control_Speed);
       avoid_state = AVOID_STATE_BACKWARD;
       avoid_state_tick = now;
     } else if (left_distance > right_distance) {
       avoid_turn_direction = 1;
+      avoid_need_return = 1;
+      avoid_turn_target = OBSTACLE_TURN_TARGET;
+      MPU6050_ResetYaw();
       Control_TurnLeft(Turn_Speed);
       avoid_state = AVOID_STATE_TURN_LEFT;
       avoid_state_tick = now;
     } else {
       avoid_turn_direction = 2;
+      avoid_need_return = 1;
+      avoid_turn_target = OBSTACLE_TURN_TARGET;
+      MPU6050_ResetYaw();
       Control_TurnRight(Turn_Speed);
       avoid_state = AVOID_STATE_TURN_RIGHT;
       avoid_state_tick = now;
@@ -135,17 +186,27 @@ void Control_AvoidanceTask(void) {
     break;
 
   case AVOID_STATE_TURN_LEFT:
-    if (now - avoid_state_tick >= AVOID_TURN_TIME) {
-      Control_Forward(Control_Speed);
-      avoid_state = AVOID_STATE_FORWARD_AFTER_TURN;
+    if (Control_TurnFinished(1)) {
+      if (avoid_need_return) {
+        Control_Forward(Control_Speed);
+        avoid_state = AVOID_STATE_FORWARD_AFTER_TURN;
+      } else {
+        Control_Stop();
+        avoid_state = AVOID_STATE_TURN_STOP;
+      }
       avoid_state_tick = now;
     }
     break;
 
   case AVOID_STATE_TURN_RIGHT:
-    if (now - avoid_state_tick >= AVOID_TURN_TIME) {
-      Control_Forward(Control_Speed);
-      avoid_state = AVOID_STATE_FORWARD_AFTER_TURN;
+    if (Control_TurnFinished(2)) {
+      if (avoid_need_return) {
+        Control_Forward(Control_Speed);
+        avoid_state = AVOID_STATE_FORWARD_AFTER_TURN;
+      } else {
+        Control_Stop();
+        avoid_state = AVOID_STATE_TURN_STOP;
+      }
       avoid_state_tick = now;
     }
     break;
@@ -153,9 +214,11 @@ void Control_AvoidanceTask(void) {
   case AVOID_STATE_BACKWARD:
     if (now - avoid_state_tick >= AVOID_BACKWARD_TIME) {
       if (avoid_turn_direction == 1) {
+        MPU6050_ResetYaw();
         Control_TurnLeft(Turn_Speed);
         avoid_state = AVOID_STATE_TURN_LEFT;
       } else {
+        MPU6050_ResetYaw();
         Control_TurnRight(Turn_Speed);
         avoid_state = AVOID_STATE_TURN_RIGHT;
       }
@@ -165,10 +228,13 @@ void Control_AvoidanceTask(void) {
 
   case AVOID_STATE_FORWARD_AFTER_TURN:
     if (now - avoid_state_tick >= AVOID_FORWARD_TIME) {
+      avoid_turn_target = OBSTACLE_TURN_TARGET;
       if (avoid_turn_direction == 1) {
+        MPU6050_ResetYaw();
         Control_TurnRight(Turn_Speed);
         avoid_state = AVOID_STATE_RETURN_RIGHT;
       } else {
+        MPU6050_ResetYaw();
         Control_TurnLeft(Turn_Speed);
         avoid_state = AVOID_STATE_RETURN_LEFT;
       }
@@ -177,7 +243,7 @@ void Control_AvoidanceTask(void) {
     break;
 
   case AVOID_STATE_RETURN_LEFT:
-    if (now - avoid_state_tick >= AVOID_TURN_TIME) {
+    if (Control_TurnFinished(1)) {
       Control_Stop();
       avoid_state = AVOID_STATE_TURN_STOP;
       avoid_state_tick = now;
@@ -185,7 +251,7 @@ void Control_AvoidanceTask(void) {
     break;
 
   case AVOID_STATE_RETURN_RIGHT:
-    if (now - avoid_state_tick >= AVOID_TURN_TIME) {
+    if (Control_TurnFinished(2)) {
       Control_Stop();
       avoid_state = AVOID_STATE_TURN_STOP;
       avoid_state_tick = now;
