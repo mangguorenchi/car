@@ -24,6 +24,7 @@
 #include "tim.h"
 #include "usart.h"
 
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <bluetooth.h>
@@ -35,7 +36,6 @@
 #include <servo.h>
 #include <stdio.h>
 #include <string.h>
-
 
 /* USER CODE END Includes */
 
@@ -90,8 +90,7 @@ int main(void) {
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick.
-   */
-  HAL_Init();
+  *  HAL_Init();
 
   /* USER CODE BEGIN Init */
 
@@ -131,15 +130,10 @@ int main(void) {
     Bluetooth_Task();
     MPU6050_Update();
 
-    static uint32_t gyro_test_tick = 0;
-    if (HAL_GetTick() - gyro_test_tick >= 500) {
-      gyro_test_tick = HAL_GetTick();
-      printf("Yaw=%.2f deg\r\n", MPU6050_GetYaw());
-    }
-
     if (carmode_Getmode() == mode_auto) {
       Control_AvoidanceTask();
     }
+
     HAL_Delay(5);
 
     /* USER CODE END WHILE */

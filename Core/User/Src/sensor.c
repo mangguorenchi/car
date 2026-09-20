@@ -9,134 +9,55 @@ static void Delay_us(uint16_t us) {
   }
 }
 
+static float HCSR04_Read(GPIO_TypeDef *trig_port,
+                         uint16_t trig_pin,
+                         GPIO_TypeDef *echo_port,
+                         uint16_t echo_pin) {
+  uint32_t start_tick;
+  uint32_t time_us;
+
+  // 发送触发脉冲
+  HAL_GPIO_WritePin(trig_port, trig_pin, GPIO_PIN_RESET);
+  Delay_us(2);
+
+  HAL_GPIO_WritePin(trig_port, trig_pin, GPIO_PIN_SET);
+  Delay_us(10);
+  HAL_GPIO_WritePin(trig_port, trig_pin, GPIO_PIN_RESET);
+
+  // 等待当前传感器的 Echo 变高
+  start_tick = HAL_GetTick();
+  while (HAL_GPIO_ReadPin(echo_port, echo_pin) == GPIO_PIN_RESET) {
+    if (HAL_GetTick() - start_tick > 100U) {
+      return -1.0f;
+    }
+  }
+
+  // Echo 高电平持续时间就是超声波往返时间
+  __HAL_TIM_SET_COUNTER(&htim3, 0);
+  start_tick = HAL_GetTick();
+
+  while (HAL_GPIO_ReadPin(echo_port, echo_pin) == GPIO_PIN_SET) {
+    if (HAL_GetTick() - start_tick > 100U) {
+      return -1.0f;
+    }
+  }
+
+  time_us = __HAL_TIM_GET_COUNTER(&htim3);
+
+  // 声速约为 0.343 mm/us，除以 2 得到单程距离
+  return (float)time_us * 0.343f / 2.0f;
+}
+
 void Sensor_Init(void) {
   HAL_TIM_Base_Start(&htim3);
 
+  // 前方 Trig 保持低电平
   HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_RESET);
 }
 
 float HCSR04_FrontRead(void) {
-  uint32_t start_tick;
-  uint16_t time_us;
-  // 确保初始是低电平
-  HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_RESET);
-
-  Delay_us(2);
-
-  // 发送10us触发脉冲
-  HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_SET);
-
-  Delay_us(10);
-
-  HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_RESET);
-
-  // 等待ECHO上升
-  start_tick = HAL_GetTick();
-
-  while (HAL_GPIO_ReadPin(US_FRONT_ECHO_GPIO_Port, US_FRONT_ECHO_Pin) ==
-         GPIO_PIN_RESET) {
-    if (HAL_GetTick() - start_tick > 100) {
-      return -1.0f;
-    }
-  }
-
-  // 开始计时
-  __HAL_TIM_SET_COUNTER(&htim3, 0);
-
-  start_tick = HAL_GetTick();
-
-  while (HAL_GPIO_ReadPin(US_FRONT_ECHO_GPIO_Port, US_FRONT_ECHO_Pin) ==
-         GPIO_PIN_SET) {
-    if (HAL_GetTick() - start_tick > 100) {
-      return -1.0f;
-    }
-  }
-
-  time_us = __HAL_TIM_GET_COUNTER(&htim3);
-//计算距离（mm）
-  return (float)time_us * 0.343f / 2.0f;
-}
-
-float HCSR04_RightRead(void) {
-  uint32_t start_tick;
-  uint16_t time_us;
-  // 确保初始是低电平
-  HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_RESET);
-
-  Delay_us(2);
-
-  // 发送10us触发脉冲
-  HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_SET);
-
-  Delay_us(10);
-
-  HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_RESET);
-
-  // 等待ECHO上升
-  start_tick = HAL_GetTick();
-
-  while (HAL_GPIO_ReadPin(US_RIGHT_ECHO_GPIO_Port, US_RIGHT_ECHO_Pin) ==
-         GPIO_PIN_RESET) {
-    if (HAL_GetTick() - start_tick > 100) {
-      return -1.0f;
-    }
-  }
-
-  // 开始计时
-  __HAL_TIM_SET_COUNTER(&htim3, 0);
-
-  start_tick = HAL_GetTick();
-
-  while (HAL_GPIO_ReadPin(US_RIGHT_ECHO_GPIO_Port, US_RIGHT_ECHO_Pin) ==
-         GPIO_PIN_SET) {
-    if (HAL_GetTick() - start_tick > 100) {
-      return -1.0f;
-    }
-  }
-
-  time_us = __HAL_TIM_GET_COUNTER(&htim3);
-  // 计算距离（mm）
-  return (float)time_us * 0.343f / 2.0f;
-}
-
-float HCSR04_LeftRead(void) {
-  uint32_t start_tick;
-  uint16_t time_us;
-  // 确保初始是低电平
-  HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_RESET);
-
-  Delay_us(2);
-
-  // 发送10us触发脉冲
-  HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_SET);
-
-  Delay_us(10);
-
-  HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_RESET);
-
-  // 等待ECHO上升
-  start_tick = HAL_GetTick();
-
-  while (HAL_GPIO_ReadPin(US_LEFT_ECHO_GPIO_Port, US_LEFT_ECHO_Pin) ==
-         GPIO_PIN_RESET) {
-    if (HAL_GetTick() - start_tick > 100) {
-      return -1.0f;
-    }
-  }
-
-  // 开始计时
-  __HAL_TIM_SET_COUNTER(&htim3, 0);
-
-  start_tick = HAL_GetTick();
-
-  while (HAL_GPIO_ReadPin(US_LEFT_ECHO_GPIO_Port, US_LEFT_ECHO_Pin) ==
-         GPIO_PIN_SET) {
-    if (HAL_GetTick() - start_tick > 100) {
-      return -1.0f;
-    }
-  }
-
-  time_us = __HAL_TIM_GET_COUNTER(&htim3);
-  // 计算距离（mm）
-  return (float)time_us * 0.343f / 2.0f;
+  return HCSR04_Read(US_TRIG_GPIO_Port,
+                     US_TRIG_Pin,
+                     US_FRONT_ECHO_GPIO_Port,
+                     US_FRONT_ECHO_Pin);
 }
