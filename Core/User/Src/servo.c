@@ -45,11 +45,6 @@ void Servo_Init(void) {
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
-
-  Servo_SetAngle(1, 180);
-  Servo_SetAngle(2, 90);
-  Servo_SetAngle(3, 90);
-  Servo_SetAngle(4, 90);
 }
 
 void Servo_Task(void) {

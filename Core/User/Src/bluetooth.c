@@ -31,7 +31,7 @@
 #define SPEED_STRAIGHT 0x01
 #define SPEED_TURN 0x02
 
-// 实际PWM速度值，可以在这里调遥控手感
+// 实际PWM速度值，可以在这里调
 #define CAR_STRAIGHT_SPEED 2800
 #define CAR_TURN_SPEED 4500
 // 舵机每次收到命令后转动的时间，时间到后自动停止

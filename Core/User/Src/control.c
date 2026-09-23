@@ -57,7 +57,7 @@
 #define RECOVERY_BACKWARD_TIME 700U
 
 // 防卡死或遇墙时后退的速度
-#define RECOVERY_BACKWARD_SPEED 2600
+#define RECOVERY_BACKWARD_SPEED 2000
 
 // 两个方向距离差超过这个值，才认为一边明显更空
 #define SCAN_DIFF_DISTANCE 100.0f
