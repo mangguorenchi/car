@@ -223,26 +223,22 @@ void Bluetooth_Task(void) {
     break;
 
   case CMD_SERVO2_FORWARD:
-    // 舵机2和舵机3控制同一个结构，所以一起正转
+    // 舵机2正方向转动
     Servo_TurnForward(2, SERVO_RUN_TIME);
-    Servo_TurnForward(3, SERVO_RUN_TIME);
     break;
 
   case CMD_SERVO2_BACKWARD:
-    // 舵机2和舵机3一起反转
+    // 舵机2反方向转动
     Servo_TurnBackward(2, SERVO_RUN_TIME);
-    Servo_TurnBackward(3, SERVO_RUN_TIME);
     break;
 
   case CMD_SERVO3_FORWARD:
-    // 舵机3命令也让2和3一起动，方便手机端按钮单独映射
-    Servo_TurnForward(2, SERVO_RUN_TIME);
+    // 舵机3正方向转动
     Servo_TurnForward(3, SERVO_RUN_TIME);
     break;
 
   case CMD_SERVO3_BACKWARD:
-    // 舵机3反转命令，同样让2和3一起动
-    Servo_TurnBackward(2, SERVO_RUN_TIME);
+    // 舵机3反方向转动
     Servo_TurnBackward(3, SERVO_RUN_TIME);
     break;
 
