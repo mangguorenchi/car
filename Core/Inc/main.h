@@ -71,6 +71,8 @@ void Error_Handler(void);
 #define ENC2_A_Pin GPIO_PIN_5
 #define ENC2_A_GPIO_Port GPIOA
 #define ENC2_A_EXTI_IRQn EXTI9_5_IRQn
+#define SERVO_US_Pin GPIO_PIN_4
+#define SERVO_US_GPIO_Port GPIOB
 #define ENC1_B_Pin GPIO_PIN_0
 #define ENC1_B_GPIO_Port GPIOB
 #define ENC2_B_Pin GPIO_PIN_1

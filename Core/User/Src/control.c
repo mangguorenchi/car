@@ -2,25 +2,23 @@
 #include "motor.h"
 #include "mpu6050.h"
 #include "sensor.h"
+#include "servo.h"
 #include <stdio.h>
 
 // 自动行驶速度，比之前3600降低一半
 #define CONTROL_SPEED 1800
 
 // 90度转弯速度
-#define TURN_SPEED 3000
-
-// 左右探测时的低速摇摆速度
-#define SCAN_TURN_SPEED 1800
+#define TURN_SPEED 2200
 
 // 前方距离小于这个值时，认为遇到障碍，单位mm
 #define FRONT_OBSTACLE_DISTANCE 425.0f
 
-// 左右探测角度
-#define SCAN_TURN_TARGET 30.0f
+// 第五个360度舵机左右扫描的运行时间，需要根据实车校准
+#define SERVO_US_SCAN_TIME 300U
 
-// 从左30度转到右30度，一共60度
-#define SCAN_TOTAL_TURN_TARGET 60.0f
+// 舵机扫描完成后的稳定时间
+#define SERVO_US_SCAN_WAIT 300U
 
 // 最终选择方向后，转90度进入下一段路
 #define TURN_90_TARGET 90.0f
@@ -41,19 +39,19 @@ typedef enum {
   // 第一次遇障碍后先停车
   AVOID_STATE_STOP_WAIT,
 
-  // 左转30度探测
+  // 舵机转到左侧
   AVOID_STATE_SCAN_LEFT,
 
   // 左侧探测前停车等待
   AVOID_STATE_SCAN_LEFT_WAIT,
 
-  // 右转60度到右侧探测位置
+  // 舵机从左侧转到右侧
   AVOID_STATE_SCAN_RIGHT,
 
   // 右侧探测前停车等待
   AVOID_STATE_SCAN_RIGHT_WAIT,
 
-  // 从右侧30度回到正前方
+  // 舵机从右侧回到中间
   AVOID_STATE_RETURN_CENTER,
 
   // 回正后判断左右距离
@@ -205,18 +203,20 @@ void Control_AvoidanceTask(void) {
     break;
 
   case AVOID_STATE_STOP_WAIT:
-    // 第一次遇障碍，先停车1秒，再开始左右探测
+    // 第一次遇障碍，先停车1秒，再让第五舵机转向左侧
     if (now - avoid_state_tick >= AVOID_STOP_TIME) {
       scan_left_distance = -1.0f;
       scan_right_distance = -1.0f;
-      Control_StartTurnLeft(SCAN_TURN_TARGET, SCAN_TURN_SPEED,
-                            AVOID_STATE_SCAN_LEFT, now);
+      Control_Stop();
+      Servo_US_TurnLeft();
+      avoid_state = AVOID_STATE_SCAN_LEFT;
+      avoid_state_tick = now;
     }
     break;
 
   case AVOID_STATE_SCAN_LEFT:
-    if (Control_TurnFinished(1)) {
-      Control_Stop();
+    if (now - avoid_state_tick >= SERVO_US_SCAN_TIME) {
+      Servo_US_Stop();
       avoid_state = AVOID_STATE_SCAN_LEFT_WAIT;
       avoid_state_tick = now;
     }
@@ -224,7 +224,7 @@ void Control_AvoidanceTask(void) {
 
   case AVOID_STATE_SCAN_LEFT_WAIT:
     // 左侧位置停稳后读取距离
-    if (now - avoid_state_tick >= AVOID_STOP_TIME) {
+    if (now - avoid_state_tick >= SERVO_US_SCAN_WAIT) {
       scan_left_distance = HCSR04_FrontRead();
 
       if (scan_left_distance < 0) {
@@ -236,14 +236,15 @@ void Control_AvoidanceTask(void) {
 
       printf("Scan left 30 deg: %.1f mm\r\n", scan_left_distance);
 
-      Control_StartTurnRight(SCAN_TOTAL_TURN_TARGET, SCAN_TURN_SPEED,
-                             AVOID_STATE_SCAN_RIGHT, now);
+      Servo_US_TurnRight();
+      avoid_state = AVOID_STATE_SCAN_RIGHT;
+      avoid_state_tick = now;
     }
     break;
 
   case AVOID_STATE_SCAN_RIGHT:
-    if (Control_TurnFinished(2)) {
-      Control_Stop();
+    if (now - avoid_state_tick >= SERVO_US_SCAN_TIME * 2U) {
+      Servo_US_Stop();
       avoid_state = AVOID_STATE_SCAN_RIGHT_WAIT;
       avoid_state_tick = now;
     }
@@ -251,7 +252,7 @@ void Control_AvoidanceTask(void) {
 
   case AVOID_STATE_SCAN_RIGHT_WAIT:
     // 右侧位置停稳后读取距离
-    if (now - avoid_state_tick >= AVOID_STOP_TIME) {
+    if (now - avoid_state_tick >= SERVO_US_SCAN_WAIT) {
       scan_right_distance = HCSR04_FrontRead();
 
       if (scan_right_distance < 0) {
@@ -263,15 +264,16 @@ void Control_AvoidanceTask(void) {
 
       printf("Scan right 30 deg: %.1f mm\r\n", scan_right_distance);
 
-      // 读取右侧后，先回正
-      Control_StartTurnLeft(SCAN_TURN_TARGET, SCAN_TURN_SPEED,
-                            AVOID_STATE_RETURN_CENTER, now);
+      // 读取右侧后，让舵机回到中间位置
+      Servo_US_TurnLeft();
+      avoid_state = AVOID_STATE_RETURN_CENTER;
+      avoid_state_tick = now;
     }
     break;
 
   case AVOID_STATE_RETURN_CENTER:
-    if (Control_TurnFinished(1)) {
-      Control_Stop();
+    if (now - avoid_state_tick >= SERVO_US_SCAN_TIME) {
+      Servo_US_Stop();
       avoid_state = AVOID_STATE_CHOOSE_DIRECTION;
       avoid_state_tick = now;
     }

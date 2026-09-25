@@ -11,5 +11,8 @@ void Servo_AddAngle(uint8_t servo_id);
 void Servo_SubAngle(uint8_t servo_id);
 void Servo_TurnForward(uint8_t servo_id, uint8_t time_ms);
 void Servo_TurnBackward(uint8_t servo_id, uint8_t time_ms);
+void Servo_US_TurnLeft(void);
+void Servo_US_TurnRight(void);
+void Servo_US_Stop(void);
 
 #endif /* SERVO_H */

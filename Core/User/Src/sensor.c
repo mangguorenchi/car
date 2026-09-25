@@ -3,9 +3,9 @@
 #include "tim.h"
 
 static void Delay_us(uint16_t us) {
-  __HAL_TIM_SET_COUNTER(&htim3, 0);
+  __HAL_TIM_SET_COUNTER(&htim4, 0);
 
-  while (__HAL_TIM_GET_COUNTER(&htim3) < us) {
+  while (__HAL_TIM_GET_COUNTER(&htim4) < us) {
   }
 }
 
@@ -33,7 +33,7 @@ static float HCSR04_Read(GPIO_TypeDef *trig_port,
   }
 
   // Echo 高电平持续时间就是超声波往返时间
-  __HAL_TIM_SET_COUNTER(&htim3, 0);
+  __HAL_TIM_SET_COUNTER(&htim4, 0);
   start_tick = HAL_GetTick();
 
   while (HAL_GPIO_ReadPin(echo_port, echo_pin) == GPIO_PIN_SET) {
@@ -42,14 +42,14 @@ static float HCSR04_Read(GPIO_TypeDef *trig_port,
     }
   }
 
-  time_us = __HAL_TIM_GET_COUNTER(&htim3);
+  time_us = __HAL_TIM_GET_COUNTER(&htim4);
 
   // 声速约为 0.343 mm/us，除以 2 得到单程距离
   return (float)time_us * 0.343f / 2.0f;
 }
 
 void Sensor_Init(void) {
-  HAL_TIM_Base_Start(&htim3);
+  HAL_TIM_Base_Start(&htim4);
 
   // 前方 Trig 保持低电平
   HAL_GPIO_WritePin(US_TRIG_GPIO_Port, US_TRIG_Pin, GPIO_PIN_RESET);

@@ -13,6 +13,11 @@
 #define SERVO1_FORWARD_PULSE 1700
 #define SERVO1_BACKWARD_PULSE 1300
 
+// 第五个舵机是360度连续旋转舵机，用于带动超声波旋转
+#define SERVO_US_STOP_PULSE 1500
+#define SERVO_US_FORWARD_PULSE 1700
+#define SERVO_US_BACKWARD_PULSE 1300
+
 // 舵机1使用连续旋转控制，舵机2、3、4使用角度控制
 // 舵机2默认从170度开始，舵机3默认从90度开始
 static uint16_t servo_angle[4] = {0, 170, 90, 160};
@@ -48,6 +53,8 @@ static void Servo_SetPulse(uint8_t servo_id, uint16_t pulse) {
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, pulse);
   } else if (servo_id == 4) {
     __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, pulse);
+  } else if (servo_id == 5) {
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, pulse);
   }
 }
 
@@ -56,9 +63,12 @@ void Servo_Init(void) {
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
 
   // 舵机1上电后先保持停止
   Servo_SetPulse(1, SERVO1_STOP_PULSE);
+  // 第五个舵机上电后保持停止，避免超声波支架自行旋转
+  Servo_US_Stop();
 
   // 舵机2是180度角度舵机，上电后转到预设位置
   Servo_SetAngle(2, servo_angle[1]);
@@ -76,6 +86,7 @@ void Servo_Task(void) {
     Servo_SetPulse(1, SERVO1_STOP_PULSE);
     servo1_stop_tick = 0;
   }
+
 }
 
 void Servo_Stop(uint8_t servo_id) {
@@ -168,4 +179,17 @@ void Servo_TurnBackward(uint8_t servo_id, uint8_t time_ms) {
   // 舵机2、3、4使用角度控制，每次减少10度
   (void)time_ms;
   Servo_SubAngle(servo_id);
+}
+
+void Servo_US_TurnLeft(void) {
+  // 超声波倒装后，舵机正方向对应物理左侧
+  Servo_SetPulse(5, SERVO_US_FORWARD_PULSE);
+}
+
+void Servo_US_TurnRight(void) {
+  Servo_SetPulse(5, SERVO_US_BACKWARD_PULSE);
+}
+
+void Servo_US_Stop(void) {
+  Servo_SetPulse(5, SERVO_US_STOP_PULSE);
 }
