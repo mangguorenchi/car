@@ -1,9 +1,9 @@
 #include "control.h"
 #include "motor.h"
 #include "mpu6050.h"
+#include "pid.h"
 #include "sensor.h"
 #include "servo.h"
-#include <stdio.h>
 
 // 自动行驶速度，比之前3600降低一半
 #define CONTROL_SPEED 1800
@@ -34,6 +34,18 @@
 
 // 两侧距离差超过这个值，才认为一边明显更空
 #define SCAN_DIFF_DISTANCE 100.0f
+
+// 连续检测到几次近距离，才确认前方真的有障碍
+#define OBSTACLE_CONFIRM_COUNT 3U
+
+// 自动前进时超过这个时间没有编码器变化，就认为可能卡墙
+#define STUCK_TIMEOUT_MS 8000U
+
+// 100ms编码器累计变化小于这个值，认为基本没有前进
+#define STUCK_ENCODER_DELTA 20
+
+// 卡墙脱困时向空的一侧转动的角度
+#define STUCK_TURN_TARGET 30.0f
 
 typedef enum {
   // 正常向前行驶
@@ -70,7 +82,34 @@ typedef enum {
   AVOID_STATE_DIRECT_LEFT_90,
 
   // 下一次遇障碍时，直接右转90度
-  AVOID_STATE_DIRECT_RIGHT_90
+  AVOID_STATE_DIRECT_RIGHT_90,
+
+  // 疑似卡墙后先停车
+  AVOID_STATE_STUCK_STOP_WAIT,
+
+  // 卡墙后向左探测
+  AVOID_STATE_STUCK_SCAN_LEFT,
+
+  // 卡墙后左侧探测前等待
+  AVOID_STATE_STUCK_SCAN_LEFT_WAIT,
+
+  // 卡墙后向右探测
+  AVOID_STATE_STUCK_SCAN_RIGHT,
+
+  // 卡墙后右侧探测前等待
+  AVOID_STATE_STUCK_SCAN_RIGHT_WAIT,
+
+  // 卡墙后舵机回中
+  AVOID_STATE_STUCK_RETURN_CENTER,
+
+  // 卡墙后选择空的一侧
+  AVOID_STATE_STUCK_CHOOSE_DIRECTION,
+
+  // 卡墙后左转30度
+  AVOID_STATE_STUCK_TURN_LEFT_30,
+
+  // 卡墙后右转30度
+  AVOID_STATE_STUCK_TURN_RIGHT_30
 } Avoid_State_t;
 
 static Avoid_State_t avoid_state;
@@ -78,11 +117,63 @@ static uint32_t avoid_state_tick;
 static float avoid_turn_target;
 static float scan_left_distance;
 static float scan_right_distance;
+static uint8_t obstacle_confirm_count;
+static int32_t stuck_last_count[4];
+static uint32_t stuck_last_progress_tick;
+static uint8_t stuck_monitor_ready;
 
 // 0表示下一次遇障碍需要先左右探测
 // 1表示下一次遇障碍直接左转90度
 // 2表示下一次遇障碍直接右转90度
 static uint8_t next_direct_turn_direction;
+
+static int32_t Control_AbsInt32(int32_t value) {
+  if (value < 0) {
+    return -value;
+  }
+
+  return value;
+}
+
+static void Control_ResetStuckMonitor(uint32_t now) {
+  stuck_last_count[0] = Encoder_GetCount(encoder1);
+  stuck_last_count[1] = Encoder_GetCount(encoder2);
+  stuck_last_count[2] = Encoder_GetCount(encoder3);
+  stuck_last_count[3] = Encoder_GetCount(encoder4);
+  stuck_last_progress_tick = now;
+  stuck_monitor_ready = 1;
+}
+
+static uint8_t Control_StuckDetected(uint32_t now) {
+  int32_t count[4];
+  int32_t delta_sum;
+
+  if (!stuck_monitor_ready) {
+    Control_ResetStuckMonitor(now);
+    return 0;
+  }
+
+  count[0] = Encoder_GetCount(encoder1);
+  count[1] = Encoder_GetCount(encoder2);
+  count[2] = Encoder_GetCount(encoder3);
+  count[3] = Encoder_GetCount(encoder4);
+
+  delta_sum = Control_AbsInt32(count[0] - stuck_last_count[0]) +
+              Control_AbsInt32(count[1] - stuck_last_count[1]) +
+              Control_AbsInt32(count[2] - stuck_last_count[2]) +
+              Control_AbsInt32(count[3] - stuck_last_count[3]);
+
+  if (delta_sum >= STUCK_ENCODER_DELTA) {
+    stuck_last_count[0] = count[0];
+    stuck_last_count[1] = count[1];
+    stuck_last_count[2] = count[2];
+    stuck_last_count[3] = count[3];
+    stuck_last_progress_tick = now;
+    return 0;
+  }
+
+  return (now - stuck_last_progress_tick >= STUCK_TIMEOUT_MS);
+}
 
 static uint8_t Control_TurnFinished(uint8_t direction) {
   float yaw = MPU6050_GetYaw();
@@ -99,7 +190,6 @@ static uint8_t Control_TurnFinished(uint8_t direction) {
 
   // 超时也结束，避免一直卡在转弯状态
   if (HAL_GetTick() - avoid_state_tick >= AVOID_MAX_TURN_TIME) {
-    printf("Gyro turn timeout, yaw=%.2f\r\n", yaw);
     return 1;
   }
 
@@ -169,6 +259,8 @@ void Control_AvoidanceReset(void) {
   avoid_turn_target = TURN_90_TARGET;
   scan_left_distance = -1.0f;
   scan_right_distance = -1.0f;
+  obstacle_confirm_count = 0;
+  Control_ResetStuckMonitor(avoid_state_tick);
   next_direct_turn_direction = 0;
 }
 
@@ -181,8 +273,8 @@ void Control_AvoidanceTask(void) {
     front_distance = HCSR04_FrontRead();
 
     if (front_distance < 0) {
-      Control_Stop();
-      printf("Ultrasonic ERROR\r\n");
+      obstacle_confirm_count = 0;
+      Control_Forward(CONTROL_SPEED);
       return;
     }
 
@@ -191,6 +283,16 @@ void Control_AvoidanceTask(void) {
                                    : DIRECT_TURN_OBSTACLE_DISTANCE;
 
     if (front_distance <= obstacle_distance) {
+      if (obstacle_confirm_count < OBSTACLE_CONFIRM_COUNT) {
+        obstacle_confirm_count++;
+      }
+    } else {
+      obstacle_confirm_count = 0;
+    }
+
+    if (obstacle_confirm_count >= OBSTACLE_CONFIRM_COUNT) {
+      obstacle_confirm_count = 0;
+      Control_ResetStuckMonitor(now);
       // 遇到障碍马上停下，不再继续向前顶
       Control_Stop();
       avoid_state_tick = now;
@@ -206,6 +308,15 @@ void Control_AvoidanceTask(void) {
       }
     } else {
       Control_Forward(CONTROL_SPEED);
+
+      if (Control_StuckDetected(now)) {
+        Control_Stop();
+        scan_left_distance = -1.0f;
+        scan_right_distance = -1.0f;
+        obstacle_confirm_count = 0;
+        avoid_state = AVOID_STATE_STUCK_STOP_WAIT;
+        avoid_state_tick = now;
+      }
     }
     break;
 
@@ -236,12 +347,9 @@ void Control_AvoidanceTask(void) {
 
       if (scan_left_distance < 0) {
         Control_Stop();
-        printf("Ultrasonic ERROR\r\n");
         avoid_state_tick = now;
         break;
       }
-
-      printf("Scan left 30 deg: %.1f mm\r\n", scan_left_distance);
 
       Servo_US_TurnRight();
       avoid_state = AVOID_STATE_SCAN_RIGHT;
@@ -264,12 +372,9 @@ void Control_AvoidanceTask(void) {
 
       if (scan_right_distance < 0) {
         Control_Stop();
-        printf("Ultrasonic ERROR\r\n");
         avoid_state_tick = now;
         break;
       }
-
-      printf("Scan right 30 deg: %.1f mm\r\n", scan_right_distance);
 
       // 读取右侧后，让舵机回到中间位置
       Servo_US_TurnLeft();
@@ -304,6 +409,7 @@ void Control_AvoidanceTask(void) {
       next_direct_turn_direction = 2;
       avoid_state = AVOID_STATE_RUN;
       avoid_state_tick = now;
+      Control_ResetStuckMonitor(now);
     }
     break;
 
@@ -314,6 +420,7 @@ void Control_AvoidanceTask(void) {
       next_direct_turn_direction = 1;
       avoid_state = AVOID_STATE_RUN;
       avoid_state_tick = now;
+      Control_ResetStuckMonitor(now);
     }
     break;
 
@@ -324,6 +431,7 @@ void Control_AvoidanceTask(void) {
       next_direct_turn_direction = 0;
       avoid_state = AVOID_STATE_RUN;
       avoid_state_tick = now;
+      Control_ResetStuckMonitor(now);
     }
     break;
 
@@ -334,6 +442,96 @@ void Control_AvoidanceTask(void) {
       next_direct_turn_direction = 0;
       avoid_state = AVOID_STATE_RUN;
       avoid_state_tick = now;
+      Control_ResetStuckMonitor(now);
+    }
+    break;
+
+  case AVOID_STATE_STUCK_STOP_WAIT:
+    if (now - avoid_state_tick >= AVOID_STOP_TIME) {
+      Control_Stop();
+      Servo_US_TurnLeft();
+      avoid_state = AVOID_STATE_STUCK_SCAN_LEFT;
+      avoid_state_tick = now;
+    }
+    break;
+
+  case AVOID_STATE_STUCK_SCAN_LEFT:
+    if (now - avoid_state_tick >= SERVO_US_SCAN_TIME) {
+      Servo_US_Stop();
+      avoid_state = AVOID_STATE_STUCK_SCAN_LEFT_WAIT;
+      avoid_state_tick = now;
+    }
+    break;
+
+  case AVOID_STATE_STUCK_SCAN_LEFT_WAIT:
+    if (now - avoid_state_tick >= SERVO_US_SCAN_WAIT) {
+      scan_left_distance = HCSR04_FrontRead();
+
+      if (scan_left_distance < 0) {
+        scan_left_distance = 0.0f;
+      }
+
+      Servo_US_TurnRight();
+      avoid_state = AVOID_STATE_STUCK_SCAN_RIGHT;
+      avoid_state_tick = now;
+    }
+    break;
+
+  case AVOID_STATE_STUCK_SCAN_RIGHT:
+    if (now - avoid_state_tick >= SERVO_US_SCAN_TIME * 2U) {
+      Servo_US_Stop();
+      avoid_state = AVOID_STATE_STUCK_SCAN_RIGHT_WAIT;
+      avoid_state_tick = now;
+    }
+    break;
+
+  case AVOID_STATE_STUCK_SCAN_RIGHT_WAIT:
+    if (now - avoid_state_tick >= SERVO_US_SCAN_WAIT) {
+      scan_right_distance = HCSR04_FrontRead();
+
+      if (scan_right_distance < 0) {
+        scan_right_distance = 0.0f;
+      }
+
+      Servo_US_TurnLeft();
+      avoid_state = AVOID_STATE_STUCK_RETURN_CENTER;
+      avoid_state_tick = now;
+    }
+    break;
+
+  case AVOID_STATE_STUCK_RETURN_CENTER:
+    if (now - avoid_state_tick >= SERVO_US_SCAN_TIME) {
+      Servo_US_Stop();
+      avoid_state = AVOID_STATE_STUCK_CHOOSE_DIRECTION;
+      avoid_state_tick = now;
+    }
+    break;
+
+  case AVOID_STATE_STUCK_CHOOSE_DIRECTION:
+    if (scan_left_distance > scan_right_distance) {
+      Control_StartTurnLeft(STUCK_TURN_TARGET, TURN_SPEED,
+                            AVOID_STATE_STUCK_TURN_LEFT_30, now);
+    } else {
+      Control_StartTurnRight(STUCK_TURN_TARGET, TURN_SPEED,
+                             AVOID_STATE_STUCK_TURN_RIGHT_30, now);
+    }
+    break;
+
+  case AVOID_STATE_STUCK_TURN_LEFT_30:
+    if (Control_TurnFinished(1)) {
+      Control_Stop();
+      avoid_state = AVOID_STATE_RUN;
+      avoid_state_tick = now;
+      Control_ResetStuckMonitor(now);
+    }
+    break;
+
+  case AVOID_STATE_STUCK_TURN_RIGHT_30:
+    if (Control_TurnFinished(2)) {
+      Control_Stop();
+      avoid_state = AVOID_STATE_RUN;
+      avoid_state_tick = now;
+      Control_ResetStuckMonitor(now);
     }
     break;
 

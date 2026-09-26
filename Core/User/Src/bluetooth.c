@@ -33,7 +33,7 @@
 
 // 实际PWM速度值，可以在这里调
 #define CAR_STRAIGHT_SPEED 2800
-#define CAR_TURN_SPEED 4500
+#define CAR_TURN_SPEED 3600
 // 舵机每次收到命令后转动的时间，时间到后自动停止
 #define SERVO_RUN_TIME 100
 

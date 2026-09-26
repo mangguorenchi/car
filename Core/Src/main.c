@@ -34,7 +34,6 @@
 #include <mpu6050.h>
 #include <sensor.h>
 #include <servo.h>
-#include <stdio.h>
 #include <string.h>
 
 
@@ -68,13 +67,6 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-int _write(int file, char *ptr, int len) {
-  // printf回调，向串口发送信息
-  HAL_UART_Transmit(&huart3, (uint8_t *)ptr, len, HAL_MAX_DELAY);
-
-  return len;
-}
 
 /* USER CODE END 0 */
 
