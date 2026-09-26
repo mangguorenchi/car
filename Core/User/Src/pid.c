@@ -1,6 +1,4 @@
 #include "pid.h"
-#include <stdio.h>
-
 #define ENCODER_COUNT_PER_REVOLUTION 390 // 编码器每转的计数值
 #define ENCODER_SAMPLE_time_ms 100       // 编码器采样时间，单位毫秒
 
@@ -82,11 +80,6 @@ void Encoder_Task(void) {
       encoder_last_count[i] = now_count;
     }
 
-    printf("ENC count: %ld, %ld, %ld, %ld | speed: %d, %d, %d, %d\r\n",
-           (long)encoder_count[0], (long)encoder_count[1],
-           (long)encoder_count[2], (long)encoder_count[3],
-           encoder_speed[0], encoder_speed[1],
-           encoder_speed[2], encoder_speed[3]);
   }
 }
 

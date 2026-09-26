@@ -3,7 +3,6 @@
 #include "mpu6050.h"
 #include "sensor.h"
 #include "servo.h"
-#include <stdio.h>
 
 // 自动行驶速度，比之前3600降低一半
 #define CONTROL_SPEED 1800
@@ -99,7 +98,6 @@ static uint8_t Control_TurnFinished(uint8_t direction) {
 
   // 超时也结束，避免一直卡在转弯状态
   if (HAL_GetTick() - avoid_state_tick >= AVOID_MAX_TURN_TIME) {
-    printf("Gyro turn timeout, yaw=%.2f\r\n", yaw);
     return 1;
   }
 
@@ -182,7 +180,6 @@ void Control_AvoidanceTask(void) {
 
     if (front_distance < 0) {
       Control_Stop();
-      printf("Ultrasonic ERROR\r\n");
       return;
     }
 
@@ -236,12 +233,9 @@ void Control_AvoidanceTask(void) {
 
       if (scan_left_distance < 0) {
         Control_Stop();
-        printf("Ultrasonic ERROR\r\n");
         avoid_state_tick = now;
         break;
       }
-
-      printf("Scan left 30 deg: %.1f mm\r\n", scan_left_distance);
 
       Servo_US_TurnRight();
       avoid_state = AVOID_STATE_SCAN_RIGHT;
@@ -264,12 +258,9 @@ void Control_AvoidanceTask(void) {
 
       if (scan_right_distance < 0) {
         Control_Stop();
-        printf("Ultrasonic ERROR\r\n");
         avoid_state_tick = now;
         break;
       }
-
-      printf("Scan right 30 deg: %.1f mm\r\n", scan_right_distance);
 
       // 读取右侧后，让舵机回到中间位置
       Servo_US_TurnLeft();
