@@ -14,6 +14,9 @@
 // 前方距离小于这个值时，认为遇到障碍，单位mm
 #define FRONT_OBSTACLE_DISTANCE 425.0f
 
+// 下一次遇障碍直接转弯时的触发距离，单位mm
+#define DIRECT_TURN_OBSTACLE_DISTANCE 300.0f
+
 // 第五个360度舵机左右扫描的运行时间，需要根据实车校准
 #define SERVO_US_SCAN_TIME 300U
 
@@ -183,7 +186,11 @@ void Control_AvoidanceTask(void) {
       return;
     }
 
-    if (front_distance <= FRONT_OBSTACLE_DISTANCE) {
+    float obstacle_distance = (next_direct_turn_direction == 0)
+                                   ? FRONT_OBSTACLE_DISTANCE
+                                   : DIRECT_TURN_OBSTACLE_DISTANCE;
+
+    if (front_distance <= obstacle_distance) {
       // 遇到障碍马上停下，不再继续向前顶
       Control_Stop();
       avoid_state_tick = now;

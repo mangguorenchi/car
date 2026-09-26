@@ -29,8 +29,6 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
 
-#define TIM3_SERVO_STOP_PULSE 1500
-
 /* TIM1 init function */
 void MX_TIM1_Init(void)
 {
@@ -209,6 +207,10 @@ void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
@@ -216,7 +218,7 @@ void MX_TIM3_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = TIM3_SERVO_STOP_PULSE;
+  sConfigOC.Pulse = 1500;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -229,7 +231,6 @@ void MX_TIM3_Init(void)
   HAL_TIM_MspPostInit(&htim3);
 
 }
-
 /* TIM4 init function */
 void MX_TIM4_Init(void)
 {
@@ -239,6 +240,7 @@ void MX_TIM4_Init(void)
   /* USER CODE END TIM4_Init 0 */
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
 
   /* USER CODE BEGIN TIM4_Init 1 */
 
@@ -255,6 +257,12 @@ void MX_TIM4_Init(void)
   }
   sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
   if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
@@ -305,6 +313,7 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
   /* USER CODE BEGIN TIM4_MspInit 0 */
 
   /* USER CODE END TIM4_MspInit 0 */
+    /* TIM4 clock enable */
     __HAL_RCC_TIM4_CLK_ENABLE();
   /* USER CODE BEGIN TIM4_MspInit 1 */
 
@@ -363,17 +372,17 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
   /* USER CODE BEGIN TIM3_MspPostInit 0 */
 
   /* USER CODE END TIM3_MspPostInit 0 */
-    __HAL_RCC_AFIO_CLK_ENABLE();
+
     __HAL_RCC_GPIOB_CLK_ENABLE();
-
-    // PB4 是 TIM3_CH1 的部分重映射引脚，同时关闭JTAG保留SWD调试
-    __HAL_AFIO_REMAP_SWJ_NOJTAG();
-    __HAL_AFIO_REMAP_TIM3_PARTIAL();
-
+    /**TIM3 GPIO Configuration
+    PB4     ------> TIM3_CH1
+    */
     GPIO_InitStruct.Pin = SERVO_US_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_Init(SERVO_US_GPIO_Port, &GPIO_InitStruct);
+
+    __HAL_AFIO_REMAP_TIM3_PARTIAL();
 
   /* USER CODE BEGIN TIM3_MspPostInit 1 */
 
@@ -423,6 +432,7 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
   /* USER CODE BEGIN TIM4_MspDeInit 0 */
 
   /* USER CODE END TIM4_MspDeInit 0 */
+    /* Peripheral clock disable */
     __HAL_RCC_TIM4_CLK_DISABLE();
   /* USER CODE BEGIN TIM4_MspDeInit 1 */
 

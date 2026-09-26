@@ -19,7 +19,7 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Set the project name
-set(CMAKE_PROJECT_NAME motor_test)
+set(CMAKE_PROJECT_NAME car)
 
 # Enable compile command to ease indexing with e.g. clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
@@ -44,12 +44,19 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
+    Core/User/Src/bluetooth.c
+    Core/User/Src/control.c
+    Core/User/Src/mode.c
+    Core/User/Src/motor.c
+    Core/User/Src/mpu6050.c
+    Core/User/Src/pid.c
+    Core/User/Src/sensor.c
+    Core/User/Src/servo.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user defined include paths
+    Core/User/Inc
 )
 
 # Add project symbols (macros)

@@ -57,6 +57,12 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define AIN1_Pin GPIO_PIN_13
+#define AIN1_GPIO_Port GPIOC
+#define AIN2_Pin GPIO_PIN_14
+#define AIN2_GPIO_Port GPIOC
+#define ENC4_B_Pin GPIO_PIN_15
+#define ENC4_B_GPIO_Port GPIOC
 #define M_PWMA_Pin GPIO_PIN_0
 #define M_PWMA_GPIO_Port GPIOA
 #define M_PWMB_Pin GPIO_PIN_1
@@ -71,8 +77,12 @@ void Error_Handler(void);
 #define ENC2_A_Pin GPIO_PIN_5
 #define ENC2_A_GPIO_Port GPIOA
 #define ENC2_A_EXTI_IRQn EXTI9_5_IRQn
-#define SERVO_US_Pin GPIO_PIN_4
-#define SERVO_US_GPIO_Port GPIOB
+#define ENC3_A_Pin GPIO_PIN_6
+#define ENC3_A_GPIO_Port GPIOA
+#define ENC3_A_EXTI_IRQn EXTI9_5_IRQn
+#define ENC4_A_Pin GPIO_PIN_7
+#define ENC4_A_GPIO_Port GPIOA
+#define ENC4_A_EXTI_IRQn EXTI9_5_IRQn
 #define ENC1_B_Pin GPIO_PIN_0
 #define ENC1_B_GPIO_Port GPIOB
 #define ENC2_B_Pin GPIO_PIN_1
@@ -103,12 +113,8 @@ void Error_Handler(void);
 #define US_TRIG_GPIO_Port GPIOA
 #define US_FRONT_ECHO_Pin GPIO_PIN_15
 #define US_FRONT_ECHO_GPIO_Port GPIOA
-#define ENC4_B_Pin GPIO_PIN_3
-#define ENC4_B_GPIO_Port GPIOB
-#define AIN1_Pin GPIO_PIN_13
-#define AIN1_GPIO_Port GPIOC
-#define AIN2_Pin GPIO_PIN_14
-#define AIN2_GPIO_Port GPIOC
+#define SERVO_US_Pin GPIO_PIN_4
+#define SERVO_US_GPIO_Port GPIOB
 #define GRY_SCL_Pin GPIO_PIN_6
 #define GRY_SCL_GPIO_Port GPIOB
 #define GRY_SDA_Pin GPIO_PIN_7
